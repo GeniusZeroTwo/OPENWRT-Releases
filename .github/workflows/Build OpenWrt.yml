@@ -3,11 +3,19 @@ name: Build Official OpenWrt Latest
 on:
   repository_dispatch:
   workflow_dispatch:
+    # 在这里添加手动触发时的输入选项
+    inputs:
+      branch:
+        description: '输入你要编译的官方分支名称 (如: master, openwrt-23.05, openwrt-22.03)'
+        required: true
+        default: 'master'
+        type: string
 
 env:
-  # 强制使用 OpenWrt 官方原版仓库和最新的 master 主线分支
+  # 强制使用 OpenWrt 官方原版仓库
   REPO_URL: https://github.com/openwrt/openwrt
-  REPO_BRANCH: master
+  # 这里引用你在触发面板上填写的变量，如果没填默认使用 master
+  REPO_BRANCH: ${{ github.event.inputs.branch || 'master' }}
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
   DIY_P1_SH: diy-part1.sh
@@ -38,10 +46,11 @@ jobs:
         sudo mkdir -p /workdir
         sudo chown $USER:$USER /workdir
 
-    - name: 克隆官方源码
+    - name: 克隆官方源码 (分支: ${{ env.REPO_BRANCH }})
       working-directory: /workdir
       run: |
         df -hT $PWD
+        echo "当前选择拉取的分支为: $REPO_BRANCH"
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
@@ -52,7 +61,7 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    - name: 更新并安装 feeds (自动处理官方依赖)
+    - name: 更新并安装 feeds
       run: |
         cd openwrt
         ./scripts/feeds update -a
@@ -87,21 +96,19 @@ jobs:
       if: (!cancelled())
       run: df -hT
 
-    - name: 整理输出文件 (剔除多余文件)
+    - name: 整理输出文件 (严格仅保留指定固件)
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
         cd openwrt/bin/targets/*/*
-        rm -rf packages
-        rm -rf *.buildinfo
-        rm -rf *.manifest
-        rm -rf sha256sums
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        mkdir -p /workdir/pure_firmware
+        mv *ext4-combined-efi.img.gz /workdir/pure_firmware/ 2>/dev/null || echo "警告：未生成指定的EFI镜像"
+        echo "FIRMWARE=/workdir/pure_firmware" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 上传固件到 Artifacts
       uses: actions/upload-artifact@v4
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
-        name: OpenWrt_Official_${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        name: OpenWrt_Official_${{ env.REPO_BRANCH }}_${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
