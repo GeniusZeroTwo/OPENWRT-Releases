@@ -1,5 +1,5 @@
 # OPENWRT-Releases
-扩容脚本
+Squashfs扩容脚本
 ```bash
 
 cat << 'EOF' > /root/expand-f2fs.sh
