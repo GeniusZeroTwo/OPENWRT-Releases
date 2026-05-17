@@ -2,6 +2,10 @@
 Squashfs扩容脚本
 ```bash
 
+```
+wget --no-check-certificate -O expand-f2fs.sh https://raw.githubusercontent.com/GeniusZeroTwo/OPENWRT-Releases/main/expand-f2fs.sh
+```
+
 cat << 'EOF' > /root/expand-f2fs.sh
 #!/bin/sh
 echo "开始执行扩容..."
